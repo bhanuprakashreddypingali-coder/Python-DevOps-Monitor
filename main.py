@@ -1,7 +1,13 @@
 from datetime import datetime, timezone
 
 import psutil
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    Counter,
+    Gauge,
+    generate_latest,
+)
 
 app = FastAPI(
     title="Python DevOps Monitoring Platform",
@@ -9,9 +15,33 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Prometheus metrics
+REQUEST_COUNT = Counter(
+    "app_requests_total",
+    "Total number of application requests",
+    ["endpoint", "method"]
+)
+
+CPU_USAGE = Gauge(
+    "system_cpu_usage_percent",
+    "Current CPU usage percentage"
+)
+
+MEMORY_USAGE = Gauge(
+    "system_memory_usage_percent",
+    "Current memory usage percentage"
+)
+
+DISK_USAGE = Gauge(
+    "system_disk_usage_percent",
+    "Current disk usage percentage"
+)
+
 
 @app.get("/")
 def home():
+    REQUEST_COUNT.labels(endpoint="/", method="GET").inc()
+
     return {
         "project": "Python DevOps Monitoring Platform",
         "status": "running",
@@ -21,6 +51,8 @@ def home():
 
 @app.get("/health")
 def health():
+    REQUEST_COUNT.labels(endpoint="/health", method="GET").inc()
+
     return {
         "status": "UP",
         "timestamp": datetime.now(timezone.utc).isoformat()
@@ -29,20 +61,20 @@ def health():
 
 @app.get("/metrics")
 def metrics():
+    REQUEST_COUNT.labels(endpoint="/metrics", method="GET").inc()
+
+    # Collect current system metrics
+    cpu = psutil.cpu_percent(interval=0.5)
     memory = psutil.virtual_memory()
     disk = psutil.disk_usage("/")
 
-    return {
-        "cpu_percent": psutil.cpu_percent(interval=1),
-        "memory": {
-            "total_mb": round(memory.total / (1024 * 1024), 2),
-            "used_mb": round(memory.used / (1024 * 1024), 2),
-            "percent": memory.percent
-        },
-        "disk": {
-            "total_gb": round(disk.total / (1024 ** 3), 2),
-            "used_gb": round(disk.used / (1024 ** 3), 2),
-            "percent": disk.percent
-        },
-        "timestamp": datetime.now(timezone.utc).isoformat()
-    }
+    # Update Prometheus gauges
+    CPU_USAGE.set(cpu)
+    MEMORY_USAGE.set(memory.percent)
+    DISK_USAGE.set(disk.percent)
+
+    # Return Prometheus exposition format
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST
+    )

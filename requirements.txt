@@ -3,3 +3,4 @@ uvicorn[standard]
 psutil
 pytest
 httpx
+prometheus-client

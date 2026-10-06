@@ -30,8 +30,11 @@ def test_metrics():
 
     assert response.status_code == 200
 
-    data = response.json()
+    assert "text/plain" in response.headers["content-type"]
 
-    assert "cpu_percent" in data
-    assert "memory" in data
-    assert "disk" in data
+    metrics = response.text
+
+    assert "app_requests_total" in metrics
+    assert "system_cpu_usage_percent" in metrics
+    assert "system_memory_usage_percent" in metrics
+    assert "system_disk_usage_percent" in metrics
